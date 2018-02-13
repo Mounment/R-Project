@@ -1,0 +1,440 @@
+TITLE by YOUR_NAME_HERE
+========================================================
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 加载你最终使用的所有组件
+# 在这个代码块的分析中。
+
+# 注意，在这个代码块中，将参数 "echo" 设为假。
+# This prevents the code from displaying in the knitted HTML output.这可以避免代码混入 HTML 输出显示。
+# 应当在文件中，对所有代码块设为 echo=FALSE 。
+
+library(ggplot2)
+library(GGally)
+library(scales)
+library(lattice)
+library(MASS)
+library(dplyr)
+library(memisc)
+```
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 加载数据
+wine <- read.csv('wineQualityReds.csv')
+# 查看数据集
+names(wine)
+str(wine)
+```
+
+
+# 单变量绘图选择
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 1.数据集中的葡萄酒质量的分布
+ggplot(aes(x=quality),data=wine)+
+  geom_histogram()
+
+```
+
+根据图形可以得出结论,质量特别好和特别次的葡萄酒的数量都不多,葡萄酒的数量更多
+的是集中在中等品质
+
+# 2.数据集中葡萄酒糖分的分布
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+ggplot(aes(x=residual.sugar),data=wine)+
+  geom_histogram()
+
+```
+
+根据图形可以得出结论,葡萄酒的甜度都不高,甜度较高的葡萄酒很少
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 3.数据集中葡萄酒酒精的分布
+ggplot(aes(x=alcohol),data=wine)+
+  geom_histogram()
+
+```
+
+根据图形可以得出结论,葡萄酒的酒精含量都不高,大概在9%~12%之间
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 4.数据集中葡萄酒PH的分布
+ggplot(aes(x=pH),data=wine)+
+  geom_histogram()
+
+```
+
+根据图形可以得出结论,葡萄酒的呈弱酸性,PH值大约在3~4之间
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 5.数据集中葡萄酒挥发酸的含量
+summary(wine$fixed.acidity)
+ggplot(aes(x=fixed.acidity),data=wine)+
+  geom_histogram()+
+  scale_x_continuous(breaks = seq(0,16,2))
+```
+
+根据图形可以得出结论,葡萄酒的挥发酸含量比较分散,多数集中在6~10之间
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 6.数据集中葡萄酒柠檬酸的含量
+summary(wine$volatile.acidity)
+ggplot(aes(x=volatile.acidity),data=wine)+
+  geom_histogram()+
+  scale_x_continuous(breaks = seq(0,1.6,0.2))
+
+```
+
+根据图形可以得出结论,葡萄酒的柠檬酸含量比较集中,多分布在0.2~0.8之间
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#7. 数据集中葡萄酒的密度
+ggplot(aes(x=density),data=wine)+
+  geom_histogram()
+```
+
+根据图形可以得出结论,葡萄酒的密度和水接近
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#8.数据集中葡萄酒的酒精含量
+summary(wine$alcohol)
+ggplot(aes(x=alcohol),data=wine)+
+  geom_histogram()+
+  scale_x_continuous(breaks=seq(8,15,1),
+                     limits = c(8,14))
+```
+
+根据图形可以得出结论,葡萄酒的酒精度大概在9~14度之间,属于低酒精度酒
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#9.葡萄酒中硫酸盐的分布
+summary(wine$sulphates)
+ggplot(aes(x=sulphates),data=wine)+
+  geom_histogram()+
+  scale_x_continuous(breaks = seq(0.3,1.3,0.1),
+                     limits = c(0.3,1.3))
+
+```
+
+根据图形可以得出结论,葡萄酒的硫酸盐含量多数在0.4~0.9之间,接近正态分布
+
+# 单变量分析
+
+### 你的数据集结构是什么？
+### 该数据集一共有13个变量
+### fixed.acidity 指的是葡萄酒中的固定或者挥发性酸度
+### volatile.acidity 指的是葡萄酒中的挥发酸,如果含量过高,会导致葡萄酒的口感变差 
+### citric.acid 指的是葡萄酒中的柠檬酸,含量越小月能改葡萄酒带来新鲜的口感
+### residual.sugar 指的是葡萄酒中发酵后的剩余糖分
+### chlorides 指的是葡萄酒中的含盐量
+### free.sulfur.dioxide 指的是葡萄酒中含的硫离子,可以防止葡萄酒氧化
+### total.sulfur.dioxide 指的是葡萄酒中含有的二氧化硫的含量
+### density 指的是葡萄酒的密度
+### pH 指的是葡萄酒的酸碱度
+### sulphates 指的是葡萄酒中硫酸盐的含量,用于平衡二氧化硫
+### alcohol 指的是葡萄酒的酒精度
+### quality 指的是葡萄酒的品质
+
+
+
+### 你的数据集内感兴趣的主要特性有哪些？
+### 葡萄酒的品质,糖分含量,酒精含量,ph值,挥发酸含量,硫酸盐含量,密度,进行分析
+
+### 你认为数据集内哪些其他特征可以帮助你探索兴趣特点？
+
+### 根据数据集内已有变量，你是否创建了任何新变量？
+### 没有
+
+### 在已经探究的特性中，是否存在任何异常分布？你是否对数据进行一些操作，如清洁、调整或改变数据的形式？如果是，你为什么会这样做？
+### 以对数据进行了部分操作,查看挥发酸的含量,将挥发酸的尺度变细化来查看更详细的信息
+
+
+
+# 双变量绘图选择
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 1.红酒的硫酸盐含量和二氧化硫之间的关系
+ggplot(aes(x=sulphates,y=total.sulfur.dioxide),data=wine)+
+  geom_point()
+```
+
+从图中可以看出硫酸盐含量和二氧化硫之间没有太大的关系
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 2.红酒的硫酸盐含量和ph之间的关系
+ggplot(aes(x=sulphates,y=pH),data=wine)+
+  geom_point(alpha=1/10,position = 'jitter')
+cor.test(wine$sulphates,wine$pH)
+```
+
+从图中可以看出硫酸盐的含量和ph有一定的相关性
+根据结果,这两个变量之间的关系是负相关,但是关联性并不大
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#3.分析酒精和密度的关系
+ggplot(aes(x=alcohol,y=density),data=wine)+
+  geom_point(position = 'jitter')
+cor.test(wine$alcohol,wine$density)
+```
+
+从图中可以看出酒精浓度和密度是负相关性
+根据结果,这两个变量之间的关系是负相关,关联性比较大,酒精浓度越高,密度越低
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#4.分析柠檬酸和ph的关联
+ggplot(aes(x=citric.acid,y=pH),data=wine)+
+  geom_point(position = 'jitter')+
+  geom_smooth(method = 'lm',color='red')
+cor.test(wine$citric.acid,wine$pH)
+```
+
+从图中可以看出柠檬酸和ph是负相关性
+根据结果,这两个变量之间的关系是负相关,关联性比较大,柠檬酸含量越高,pH值越低
+
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#5.分析挥发酸和ph的关联
+ggplot(aes(x=fixed.acidity,y=pH),data=wine)+
+  geom_point(position = 'jitter')+
+  geom_smooth(method = 'lm',color='red')
+cor.test(wine$fixed.acidity,wine$pH)
+```
+从图中可以看出挥发酸和ph是负相关性
+根据结果,这两个变量之间的关系是负相关,关联性很大,挥发酸含量越高,pH值越低
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#6.分析品质和酒精含量的关系
+ggplot(aes(x=quality,y=pH),data=wine)+
+  geom_point(position = 'jitter',alpha=1/5)+
+  scale_x_continuous(breaks = seq(4,8,1))
+
+cor.test(wine$quality,wine$pH)
+
+```
+
+可以从图中看出pH和酒的品质没有太大的关联
+根据结果,这两个变量之间的关系是负相关,但是关联性很小
+
+```{r warning=FALSE,fig.width = 15, fig.height = 15}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#7.绘制各个变量的散点图
+theme_set(theme_minimal(20))
+wine_sub <- wine[,c(2:13)]
+wine_sample <- wine_sub[sample.int(nrow(wine_sub),1000),]
+ggpairs(wine_sample,upper = list(continuous = wrap("cor", size=3)))
+```
+
+可以从图中看出关联性最强的变量是柠檬酸和酸度
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#8.酒精度和品质的关系
+ggplot(aes(x=factor(quality),y=alcohol),data=wine)+
+  geom_point(position = 'jitter',alpha=1/5)+
+  geom_boxplot(alpha=1/2,color='green')+
+  stat_summary(fun.y = 'mean',geom='point',color='red')+
+  geom_smooth(method = 'lm',aes(group=1))
+```
+
+可以从图中看出酒精浓度越高,葡萄酒的质量越好,但是关联不是太大
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#9.挥发酸和酒的品质的关系
+ggplot(aes(x=factor(quality),y=volatile.acidity),data=wine)+
+  geom_point(position = 'jitter',alpha=1/5)+
+  geom_boxplot(alpha=1/2,color='green')+
+  stat_summary(fun.y = 'mean',geom = 'point',color='red')+
+  geom_smooth(method = 'lm',aes(group=1))
+
+```
+
+可以从图中看出挥发酸的含量越低,酒的品质越好
+
+
+# 双变量分析
+
+### 探讨你在这部分探究中观察到的一些关系。这些感兴趣的特性与数据集内其他特性有什么区别？
+### 我所查找的关系主要是葡萄酒的酸度,密度,酒精度,含硫量的关系
+### 主要是用的变量有quality,volatile.acidity,alcohol,PH,density,sulphates之间
+### 两两进行查找
+
+### 你是否观察到主要特性与其他特性之间的有趣关系？
+### 酒精度和密度是呈负相关
+### 挥发酸的含量和葡萄酒的品质呈负相关
+### 挥发酸的含量和ph是呈负相关
+### 硫酸盐的含量和ph值呈负相关,但是关联并不是太明显
+### 柠檬酸的含量和ph值呈负相关
+
+### 你发现最强的关系是什么？
+### 柠檬酸的含量和ph的关系
+
+
+
+
+
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+# 多变量绘图选择
+#我们在单变量和双变量的分析中并没有找到影响葡萄酒品质的决定性因素,
+#所以在多变量的探索中,继续寻找影响葡萄酒品质的因素
+#1.找出质量和挥发酸之间的关系
+ggplot(aes(x=fixed.acidity,y=volatile.acidity),data=wine)+
+  geom_point(aes(color=quality))
+
+```
+
+可以从图中看出质量较高的葡萄酒分布在挥发酸较低的区域
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#可以通过构建挥发酸为条件,创建关于非挥发酸的均值和中位值,看看能否找出规律
+fixed_volatile_acidity <- wine %>% 
+  group_by(volatile.acidity) %>%
+  summarise(fixed.acidity_mean = mean(fixed.acidity),
+            fixed.acidity_median = median(fixed.acidity),
+            quality_mean = mean(quality)) %>%
+  arrange(volatile.acidity)
+
+ggplot(aes(x=fixed.acidity_mean,y=volatile.acidity),data=fixed_volatile_acidity)+geom_point(aes(color=quality_mean))
+
+```
+
+可以从图中看出品质越好的葡萄酒有着很低的挥发酸和很高的非挥发酸,
+挥发酸的存在是影响酒的品质的重要因素
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#2.找出酒精度和密度,葡萄酒质量之间的关系
+ggplot(aes(x=alcohol,y=density,color=factor(quality)),
+       data = wine)+
+  geom_point(position = 'jitter',alpha=1/2,size=1)+
+  geom_smooth(method = 'lm',se=F,size=1)+
+  scale_color_brewer(palette = 'Green')+
+  ggtitle('alcohol and density')+
+  ylab('density(g/ml)')+
+  xlab('alcohol content(mg/L)')
+```
+
+可以从图上看出密度越高,酒精度越低,同时密度低,葡萄酒的品质越好
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#3.葡萄酒质量与挥发酸和非挥发酸之间的关系
+ggplot(aes(x=fixed.acidity,y=volatile.acidity),data=wine)+
+  geom_point(aes(color=quality))+
+  facet_wrap(~quality)+
+  ggtitle('acidity with quality')
+
+```
+
+可以从图上看出品质越好的葡萄酒的挥发酸越少
+
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+#4.葡萄酒质量与硫酸盐和二氧化硫的含量与品质的关系
+ggplot(aes(x=free.sulfur.dioxide,y=total.sulfur.dioxide),data=wine)+
+  geom_point(aes(color=sulphates))+
+  facet_wrap(~quality)+
+  ggtitle('SO2 with quality')
+
+```
+
+可以从图上看出硫酸盐添加剂对于葡萄酒中的琉离子和二氧化硫的含量有着较大影响,
+硫酸盐添加剂的浓度越高,葡萄酒中的琉离子和二氧化硫的含量越高,不同品质的葡萄酒都是如此
+
+# 多变量分析
+
+###  探讨你在这部分探究中观察到的一些关系。通过观察感兴趣的特性，是否存在相互促进的特性？
+### 存在相关性
+### 挥发酸和非挥发酸的含量会影响葡萄酒的品质
+### 酒精度也会影响葡萄酒的品质
+### 可以得出普遍的规律,即所有的葡萄酒都含有琉离子,并且硫离子的含量和硫酸盐的比例
+### 呈正相关
+
+### 这些特性之间是否存在有趣或惊人的联系呢？
+### 密度和酒精度是负相关
+### 非挥发酸与品质呈正相关
+### 挥发酸与品质呈负相关
+
+
+### 选项：你是否创建过数据集的任何模型？讨论你模型的优缺点。
+### 创建新的数据模型,我将非挥发酸作为分组条件,获取挥发酸的平均值和中位值
+### 再根据质量进行排序,得到新的数据框架来探索挥发酸和非挥发酸对品质的影响
+
+------
+
+# 定稿图与总结
+
+### 绘图一
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+ggplot(aes(x=factor(quality),y=alcohol),data=wine)+
+  geom_point(position = 'jitter',alpha=1/5)+
+  geom_boxplot(alpha=1/2,color='green')+
+  stat_summary(fun.y = 'mean',color='red',geom = 'point')+
+  geom_smooth(method = 'lm',aes(group=1))+
+  ggtitle('酒精度与品质的关系')
+
+```
+
+### 描述一
+可以从图上看出品质越好的葡萄酒酒精度越高
+
+### 绘图二
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+ggplot(aes(x=fixed.acidity,y=density),data=wine)+
+  facet_wrap(~quality)+
+  geom_point(aes(color=quality))+
+  ggtitle('非挥发酸与密度的关系')
+```
+
+### 描述二
+根据图片可以看出非挥发酸越高,葡萄酒的密度就越大
+
+### 绘图三
+```{r echo=FALSE,warning=FALSE}
+knitr::opts_chunk$set(message = FALSE,echo = FALSE,warning = FALSE)
+ggplot(aes(x=alcohol,y=density,color=factor(quality)),
+       data = wine)+
+  geom_point(position = 'jitter',alpha=1/2,size=1)+
+  geom_smooth(method = 'lm',se=F,size=1)+
+  scale_color_brewer(palette = 'Green')+
+  ggtitle('不同品质下酒精度和密度的关系')+
+  ylab('density(g/ml)')+
+  xlab('alcohol content(mg/L)')
+```
+
+### 描述三
+从图上可以看出不同品质的葡萄酒都满足酒精度越高密度越低的规则
+
+------
+
+# 反思
+### 在这次的项目中我主要是分析葡萄酒质量入手来分析一些与之相关的变量
+### 首先查阅资料了解示例文件中的每列的定义,并且初步进行猜测品质与哪些
+### 因素有关联.
+### 其次我在探索数据的过程中开始没有发现哪些变量和品质有着太多的关系,但是我通过每个变量和品质的关联图
+### 可以找到具体是哪些变量的改变了葡萄酒的品质,但是美中不足的是没有价格来给我作为参考标准
+### 同时数据集的数据和描述列并不是太多,如果有更多的数据.本次的分析只是大概地描述了葡萄酒质量和
+### 挥发酸,酒精度,密度,含硫量来入手的,可能部分图表和数据并不是很准确,相信如果有更大更多的数据集
+### 进行分析,会得出更加精确的图表和分析结果.唯一美中不足的是,如何找出挥发酸和葡
+### 萄酒品质的线性模型来更加精确的描述这种关系,是我接下来要探究的问题,希望此处可
+### 以得到老师的指点,这样模型的可以定义这两者中更精确的关系,得出更准确的数据
