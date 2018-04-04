@@ -1,0 +1,290 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+library(reshape2)
+library(ggplot2)
+library(countrycode)
+library(recommenderlab)
+```
+```{r}
+data("MovieLense")
+dim(MovieLense)
+str(MovieLense)
+head(MovieLense@data)
+```
+```{r}
+vector_rating <- as.vector(MovieLense@data)
+table_rating <- table(vector_rating)
+
+#查看非0的评分
+vector_rating <- vector_rating[vector_rating!=0]
+vector_rating <- factor(vector_rating)
+qplot(vector_rating) + ggtitle('Distribution of the ratings')
+
+#找到评分比较多的电影和打分比较多的用户
+rating_moives <- MovieLense[rowCounts(MovieLense) > 50,colCounts(MovieLense) > 100]
+dim(rating_moives)
+
+```
+```{r}
+which_train <- sample(x=c(T,F),size = nrow(rating_moives),replace = T,prob = c(0.8,0.2))
+recc_data_train <- rating_moives[which_train,]
+recc_data_test <- rating_moives[!which_train,]
+dim(recc_data_train)
+dim(recc_data_test)
+
+
+recc_model <- Recommender(data=recc_data_train,method='IBCF')
+recc_model
+class(recc_model)
+
+model_detail <- getModel(recc_model)
+model_detail$description
+str(model_detail)
+
+dim(model_detail$sim)
+n_items_top <- 20
+image(model_detail$sim[1:n_items_top,1:n_items_top],main = "Heatmap of the first rows and columns")
+
+n_recommended <- 6
+recc_predicted <- predict(object = recc_model,newdata=recc_data_test,n=n_recommended)
+recc_user_1 <- recc_predicted@items[[1]]
+moive_user_1 <- recc_predicted@itemLabels[recc_user_1]
+
+moive_user_1
+```
+
+```{r}
+#使用UBCF
+recommender_models <- recommenderRegistry$get_entries(dataType='realRatingMatrix')
+recommender_models$UBCF_realRatingMatrix$parameters
+recc_model_UBCF = Recommender(data = recc_data_train,method='UBCF',
+                              param=list(normalize='Z-score',nn=5,method='Cosine'))
+model_detail_UBCF <- getModel(recc_model_UBCF)
+names(model_detail_UBCF)
+model_detail_UBCF$data
+
+
+recc_predicted_UBCF <- predict(object = recc_model_UBCF,newdata=recc_data_test,n=6)
+recc_predicted_UBCF
+recc_martix <- sapply(recc_predicted_UBCF@items, function(x){
+  colnames(rating_moives[x])
+})
+dim(recc_martix)
+recc_martix[,1:4]
+```
+```{r}
+# 对二进制数据进行建模
+recc_model_IBCF_bin <-Recommender(recc_data_train,method='IBCF',param=list(method='Jaccard'))
+model_detail_IBCF_bin <- getModel(recc_model_IBCF_bin)
+recc_predicted_IBCF_bin <- predict(object = recc_model_IBCF_bin,newdata=recc_data_test,n=n_recommended)
+recc_martix <- sapply(recc_predicted_IBCF_bin@items,function(x){
+  colnames(rating_moives)[x]
+})
+head(recc_martix)
+
+
+recc_model_UBCF_bin <-Recommender(recc_data_train,method='UBCF',param=list(method='Jaccard'))
+model_detail_UBCF_bin <- getModel(recc_model_UBCF_bin)
+recc_predicted_UBCF_bin <- predict(object = recc_model_UBCF_bin,newdata=recc_data_test,n=n_recommended)
+recc_martix <- sapply(recc_predicted_IBCF_bin@items,function(x){
+  colnames(rating_moives)[x]
+})
+head(recc_martix)
+```
+```{r}
+eval_set <- evaluationScheme(data=rating_moives,method='cross-validation',k=4,given=15,goodRating=3)
+models_to_evaluate <- list(
+  IBCF_cos = list(name='IBCF',param=list(method='cosine')),
+  IBCF_cor = list(name='IBCF',param=list(method='pearson')),
+  UBCF_cos = list(name='UBCF',param=list(method='cosine')),
+  UBCF_cor = list(name='UBCF',param=list(method='pearson')),
+  random = list(name='Random',param=NULL)
+)
+n_recommendations <- c(1,5,seq(10,100,10))
+list_results <- evaluate(x=eval_set,method =models_to_evaluate,n= n_recommendations)
+
+plot(list_results,annotate=1,legend=('topleft'))
+title('ROC curve')
+
+# 参数优化
+vector_k <- c(5, 10, 20, 30, 40)
+
+
+models_to_evaluate <- lapply(vector_k, function(k){
+  list(name = "IBCF", param = list(method = "cosine", k = k))
+})
+
+
+names(models_to_evaluate) <- paste0("IBCF_k_", vector_k)
+
+
+n_recommendations <- c(1, 5, seq(10, 100, 10))
+list_results <- evaluate(x = eval_set, method = models_to_evaluate, n
+                         = n_recommendations)
+
+par(mar=c(1.1 ,1.1, 1.1, 1.1))
+
+plot(list_results, annotate = 1, legend = "topleft")
+title("ROC curve")
+
+```
+
+
+```{r}
+library(data.table)
+library(reshape2)
+library(ggplot2)
+library(countrycode)
+library(recommenderlab)
+```
+
+```{r}
+
+web_data <- read.csv('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第二天\\5推荐系统\\anonymous-msweb.test.txt',header=FALSE)
+head(web_data)
+#选择前两列
+table_users <- web_data[, 1:2]
+##定义成data frame
+table_users <- data.table(table_users)
+#定义列名称
+setnames(table_users, 1:2, c("category", "value"))
+table_users <- table_users[category %in% c("C", "V")]
+head(table_users)
+```
+```{r}
+#每遇到一个新用户则chunk user +1
+table_users[, chunk_user := cumsum(category == "C")]
+head(table_users)
+tail(table_users)
+
+### 把user 和item 分成两列
+table_long <- table_users[, list(user = value[1], item = value[-1]), by ="chunk_user"]
+head(table_long)
+
+
+### long to wide 长表变宽表
+table_long[, value := 1]
+table_wide <- reshape(data = table_long,
+                      direction = "wide",
+                      idvar = "user",
+                      timevar = "item",
+                      v.names = "value")
+head(table_wide[, 1:8, with = FALSE])
+
+# save user id 
+vector_users <- table_wide[,user]
+#delete user id and chunk_user from dataset
+table_wide[, user := NULL]
+table_wide[, chunk_user := NULL]
+
+# col name remove value. 
+##对列名称进行修正，只取前7个字符
+setnames(x = table_wide,
+         old = names(table_wide),
+         new = substring(names(table_wide),7))
+
+# add row name 添加行名称
+matrix_wide <- as.matrix(table_wide)
+rownames(matrix_wide) <- vector_users
+head(matrix_wide[,1:6])
+# convert to binary rating
+# 转换成二进制矩阵
+matrix_wide[is.na(matrix_wide)] <- 0
+ratings_matrix <- as(matrix_wide, "binaryRatingMatrix")
+ratings_matrix
+ratings_matrix@data
+
+
+image(ratings_matrix[1:50, 1:50], main = "Binary rating matrix")
+
+#删除5000个网页访问不到5的页面和去掉用户访问小于5个网页的用户
+ratings_matrix <- ratings_matrix[,colCounts(ratings_matrix) >= 5]
+ratings_matrix <- ratings_matrix[rowCounts(ratings_matrix) >= 5,]
+ratings_matrix
+
+```
+```{r}
+
+
+table_in <- data.table(web_data)
+table_items <- table_in[V1=='A']
+head(table_items)
+
+table_items <- table_items[,c(2,4,5),with=F]
+setnames(table_items,1:3,c('id','description','url'))
+table_items <- table_items[order(id)]
+
+
+table_items[,category := 'product']
+name_countries <-c(countrycode_data$country.name)
+                    
+table_items[description %in% name_countries, category := "region"]
+
+table_items[, list(n_items = .N), by = category]
+```
+```{r}
+which_train <- sample(x=c(T,F),
+                      size = nrow(ratings_matrix),
+                      replace = T,
+                      prob = c(0.8,0.2)
+                      )
+recc_data_train <- ratings_matrix[which_train,]
+recc_data_test <- ratings_matrix[!which_train,]
+
+web_model <- Recommender(data=recc_data_train,method='IBCF',parameter=list(method='Jaccard'))
+dim(web_model@model$sim)
+
+# 计算item相似性矩阵
+dist_ratings <- as(web_model@model$sim,'matrix')
+
+# 计算category的相似性矩阵
+dist_category <- table_items[,1-dist(category == 'product')]
+class(dist_category)
+dist_category <- as(dist_category,'matrix')
+head(dist_category)
+
+dim(dist_category)
+dim(dist_ratings)
+
+rownames(dist_category) <- table_items[,id]
+colnames(dist_category) <- table_items[,id]
+
+vector_items <- rownames(dist_ratings)
+dist_category <- dist_category[vector_items,vector_items]
+dim(dist_category)
+
+weight_catrgory <- 0.25
+dist_tot <- dist_category * weight_catrgory + dist_ratings * (1-weight_catrgory)
+web_model@model$sim <- as(dist_tot,'dgCMatrix')
+n_recommend <- 10
+web_predict <- predict(object = web_model,newdata=recc_data_test,n=n_recommend)
+head(web_predict@itemLabels,10)
+```
+
