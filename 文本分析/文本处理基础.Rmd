@@ -1,0 +1,222 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+
+```{r}
+# 文本挖掘
+library(devtools)
+library(tm)
+library(jiebaR)
+library(jiebaRD)
+library(tmcn)
+library(NLP)
+news <- readLines('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\2文本挖掘\\xitalk2017.txt',encoding='UTF-8')
+head(news)
+```
+
+```{r}
+gsub('[0-9,a-z,A-Z]','',news) -> news 
+segword_tmp =worker()
+segword = segword_tmp <= news
+stopwords = readLines('E:\\Udacity\\Data Analysis High\\R\\R_Study\\第一天数据\\中文停用词表.txt',encoding='UTF-8')
+head(stopwords,10)
+```
+```{r}
+removewords <- function(targetword,stopword){
+  targetword = targetword[targetword%in%stopword == F]
+  return(targetword)
+}
+
+segword2 <- sapply(X=segword, FUN = removewords,stopwords)
+head(segword2)
+
+
+segword2[[1]]
+length(unlist(segword))
+length(unlist(segword2))
+```
+
+
+
+```{r}
+library(wordcloud)
+word_freq <- createWordFreq(unlist(segword2))
+opar <- par(no.readonly = T)
+par(bg='black')
+
+wordcloud(words = word_freq$word, freq = word_freq$freq, max.words = 600,
+          random.color = TRUE, colors = rainbow(n = 7))
+par(opar)
+```
+
+```{r}
+library(wordcloud2)
+letterCloud(word_freq, word = "R",color = 'random-dark',backgroundColor = "snow")
+wordcloud2(word_freq, size = 1,shape = 'circle')
+```
+
+
+
+
+```{r}
+# 使用机器学习来判断tweet中的感情色彩
+library(RTextTools)
+library(e1071)
+```
+
+
+```{r}
+pos_tweets =  rbind(
+  c('I love this car', 'positive'),
+  c('This view is amazing', 'positive'),
+  c('I feel great this morning', 'positive'),
+  c('I am so excited about the concert', 'positive'),
+  c('He is my best friend', 'positive')
+)
+
+neg_tweets = rbind(
+  c('I do not like this car', 'negative'),
+  c('This view is horrible', 'negative'),
+  c('I feel tired this morning', 'negative'),
+  c('I am not looking forward to the concert', 'negative'),
+  c('He is my enemy', 'negative')
+)
+
+test_tweets = rbind(
+  c('feel happy this morning', 'positive'),
+  c('larry friend', 'positive'),
+  c('not like that man', 'negative'),
+  c('house not great', 'negative'),
+  c('your song annoying', 'negative')
+)
+
+
+
+tweets <- rbind(pos_tweets,neg_tweets,test_tweets)
+tweets
+
+```
+
+```{r}
+matrix <- create_matrix(tweets[,1],
+                        language = 'English',
+                        removeStopwords = F,
+                        removeNumbers = T,
+                        stemWords = F)
+mat <- as.matrix(matrix)
+classifier <- naiveBayes(mat[1:10],as.factor(tweets[1:10,2]))
+
+```
+
+```{r}
+predicted <- predict(classifier,mat[11:15,])
+predicted
+table(tweets[11:15,2],predicted)
+recall_accuracy(tweets[11:15,2],predicted)
+```
+
+
+```{r}
+as.factor(tweets[11:15,2])
+container <- create_container(matrix,
+                              as.numeric(as.factor(tweets[,2])),
+                              trainSize = 1:10,
+                              testSize = 11:15,
+                              virgin = T)
+models <- train_models(container,
+                       algorithms = c('MAXENT','SVM','RF','BAGGING','TREE'))
+res <- classify_models(container,models)
+
+table(as.numeric(as.factor(tweets[11:15,2])),res[,'FORESTS_LABEL'])
+table(as.numeric(as.factor(tweets[11:15,2])),res[,'MAXENTROPY_LABEL'])
+
+recall_accuracy(as.numeric(as.factor(tweets[11:15,2])),res[,'FORESTS_LABEL'])
+recall_accuracy(as.numeric(as.factor(tweets[11:15,2])),res[,'MAXENTROPY_LABEL'])
+recall_accuracy(as.numeric(as.factor(tweets[11:15,2])),res[,'TREE_LABEL'])
+recall_accuracy(as.numeric(as.factor(tweets[11:15,2])),res[,'BAGGING_LABEL'])
+recall_accuracy(as.numeric(as.factor(tweets[11:15,2])),res[,'SVM_LABEL'])
+
+analytics <- create_analytics(container,res)
+summary(analytics)
+head(analytics@document_summary)
+N=4
+set.seed(2018)
+cross_validate(container,N,'MAXENT')
+cross_validate(container,N,'TREE')
+cross_validate(container,N,'SVM')
+cross_validate(container,N,'RF')
+```
+
+
+```{r}
+setwd('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\2文本挖掘')
+
+
+
+happy <- readLines('happy.txt')
+happy_test <- readLines('happytest.txt')
+sad <- readLines('sad.txt')
+sad_test <- readLines('sadtest.txt')
+```
+
+
+```{r}
+tweet <- c(happy,sad)
+tweet_test <- c(happy_test,sad_test)
+tweet_all <- c(tweet,tweet_test)
+
+sentiment <- c(rep('happy',length(happy)),
+               rep('sad',length(sad)))
+sentiment_test <- c(rep('happy',length(happy_test)),
+               rep('sad',length(sad_test)))
+sentiment_all <- as.factor(c(sentiment,sentiment_test))
+
+```
+
+```{r}
+mat2 <- create_matrix(tweet_all,
+                      language = 'English',
+                      removeStopwords = F,
+                      removeNumbers = T,
+                      stemWords = F,
+                      tm::weightTfIdf)
+mat2 <- as.matrix(mat2)
+classifier2 <- naiveBayes(mat2[1:160],as.factor(sentiment_all[1:160]))
+predicted2 <- predict(classifier2,mat[161:180])
+predicted2
+table(sentiment_test,predicted2)
+recall_accuracy(sentiment_test,predicted2)
+```
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
