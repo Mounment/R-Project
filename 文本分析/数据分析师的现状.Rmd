@@ -1,0 +1,315 @@
+---
+title: '16'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+```{r}
+```
+
+```{r}
+library(readxl)
+library(jiebaR)
+library(jiebaRD)
+library(zoo)
+library(VIM)
+library(plyr)
+library(ggplot2)
+library(wordcloud2)
+```
+
+```{r}
+CN.df <- read_excel('E:\\Udacity\\Data Analysis High\\R\\R_Study\\CN_lagou_jobdata.xlsx',1)
+
+CN.df <- CN.df[,c('title','salary','experience','education','campany','scale','scale2','description','phase','city')]
+str(CN.df)
+```
+
+```{r}
+aggr(CN.df,prop=T,numbers=T)
+
+# 返回分词频数表的排序
+top.freq <- function(x,topn=0){
+  require(plyr)
+  top.df <- count(x) 
+  top.df <- top.df[order(top.df$freq,decreasing = TRUE),]
+  if(topn > 0) return(top.df[1:topn,])
+  else  return(top.df)
+}
+
+# 排序
+reorder_size <- function(x,decreasing=T){
+  factor(x,levels = names(sort(table(x),decreasing=decreasing)))
+}
+
+# ggplot自定义主题
+my.ggplot.theme <- function(...,bg='white'){
+  require('guid')
+  theme_classic(...)+
+    theme(rect = element_rect(fill = bg),
+          plot.title = element_text(hjust = 0.5),
+          text = element_text(family = 'STHeiti'),
+          panel.background = element_rect(fill='transparent', color='#333333'),
+          axis.line = element_line(color='#333333',size = 0.25),
+          legend.key = element_rect(fill='transparent',colour = 'transparent'),
+          panel.border = element_rect(fill='transparent',colour = 'transparent'),
+          panel.grid = element_line(colour = 'grey95'),
+          panel.grid.major = element_line(colour = 'grey92',size = 0.25),
+          panel.grid.minor = element_line(colour = 'grey92',size = 0.1))
+}
+
+# 多图展示
+mutiplot <- function(...,plotlist=NULL,file,cols=1,layout=NULL){
+  library(grid)
+  plots <- c(list(...),plotlist)
+  numPlots <- length(plots)
+  if(is.null(layout)){
+    layout <- matrix(seq(1,cols*ceiling(numPlots/cols)),
+                     ncol = cols,
+                     nrow = ceiling(numPlots/cols))
+  }
+  if(numPlots == 1){
+    print(plot[[1]])
+  }
+  else{
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout),ncol(layout))))
+    for(i in 1:numPlots){
+      matchidx <- as.data.frame(which(layout==i,arr.ind = T))
+      print(plots[[i]],vp=viewport(layout.pos.row = matchidx$row,layout.pos.col = matchidx$col))
+    }
+  }
+}
+
+
+
+```
+
+```{r}
+cleaning <- function(my.data){
+  # 去掉重复值
+  my.data <- my.data[!duplicated(my.data[c('title','campany','description')]),]
+  # 平均月薪
+  max_sal <- as.numeric(sub('([0-9]*).*','\\1',my.data$salary))
+  min_sal <- as.numeric(sub('.*-([0-9]*).*','\\1',my.data$salary))
+  my.data$avg_sal <- (max_sal+min_sal)/2
+  
+  #清理不需要的字符,将需要分析的字符转换成因子
+  my.data$city <- factor(gsub('[/]*','',my.data$city))
+  
+  my.data$experience <- gsub('经验|[/ ]*','',my.data$experience)
+  my.data$experience[my.data$experience %in% c('不限','应届毕业生')] <- '1年以下'
+  my.data$experience<- factor(my.data$experience,
+                              levels = c('1年以下','1-3年','3-5年','5-10年','10年以上'))
+  my.data$education <- gsub('学历|及以上|[/ ]*','',my.data$education)
+  my.data$education[my.data$education == '不限'] <- '大专'
+  my.data$education <- factor(my.data$education,
+                              levels = c('大专','本科','硕士'))
+  my.data$phase <- factor(gsub('[\n]*','',my.data$phase),
+                        levels=c('不需要融资','未融资','天使轮','A轮','B轮','C轮','D轮及以上','上市公司'))
+  my.data$campany <- gsub('[\n| ]*','',my.data$campany)
+  my.data$scale <- factor(gsub('.*(少于15人|15-50人|50-150人|150-500人|500-2000人|2000人以上).*',
+                                 '\\1',paste(my.data$scale,my.data$scale2)),
+                           levels =c("少于15人","15-50人","50-150人","150-500人","500-2000人","2000人以上"))
+  my.data$id <- index(my.data)
+  my.data <- droplevels(subset(my.data,select=-scale2))
+  return(my.data)
+}
+
+CN.clean <- cleaning(CN.df)
+str(CN.clean)
+```
+```{r}
+engine <- worker(user = 'E://Udacity//R//R-3.4.3//library//jiebaRD//dict//user.dict.utf8',encoding = 'UTF-8')
+word.lis <- lapply(CN.clean$description, function(x){
+  v <- gsub('[\u4e00-\u9fa5|0-9|\\.|\\-]','',segment(x,engine))
+  v <- v[v!='']
+  return(v)
+})
+segWord <- toupper(unlist(word.lis))
+stopWords <- toupper(readLines('E://Udacity//R//R-3.4.3//library//jiebaRD//dict//stop_words.utf8',encoding = 'UTF-8'))
+
+removewords <- function(targetword,stopword){
+  targetword = targetword[targetword%in%stopword == F]
+  return(targetword)
+}
+
+segword<- sapply(X=segWord, FUN = removewords,stopWords)
+
+word_freq <- top.freq(unlist(segword),15)
+
+id <- NULL
+keyword <- NULL
+for(i in index(word.lis)){
+  id <- c(id,rep(i,length(word.lis[[i]])))
+  keyword <- c(keyword,word.lis[[i]])
+}
+keyword.df <- data.frame("id"=id,"keyword"=toupper(keyword))
+keyword.df <- droplevels(keyword.df[keyword.df$keyword %in% word_freq$x,])
+
+merge.df <- merge(CN.clean,keyword.df,by = 'id')
+
+str(merge.df)
+summary(merge.df)
+```
+```{r}
+keys <- worker(type = "keywords",
+               user = "E://Udacity//R//R-3.4.3//library//jiebaRD//dict//user.dict.utf8",
+               topn = 20,
+               encoding = 'UTF-8',
+               stop_word = "E://Udacity//R//R-3.4.3//library//jiebaRD//dict//stop_words.utf8")
+keyword.lis <- lapply(CN.clean$description, function(x){
+  v <- gsub("[a-zA-Z|0-9|\\.|\\-]","",keywords(x,keys))
+  v <- v[v!=""]
+  return(v)
+})
+keyword.lis <- unlist(keyword.lis)
+#形成词频表
+not.tool.keyword <- top.freq(keyword.lis)
+str(not.tool.keyword)
+
+```
+
+```{r}
+attach(CN.clean)
+summary(CN.clean[c("city","phase","scale","education","experience","avg_sal")])
+```
+```{r}
+p.cn <- ggplot(CN.clean) + my.ggplot.theme()
+#问题1：不同地区，数据分析岗位的需求分布以及对应的薪资分布
+city.table <- data.frame(prop.table(table(reorder_size(city,T))))
+names(city.table)[1] <- 'city'
+p1 <- ggplot(city.table,aes(x=city,y=Freq))+
+  my.ggplot.theme()+
+  geom_bar(fill='turquoise3',stat = 'identity')+
+  labs(x='城市',y='不同城市需求占总量的比率',title="“北京，上海，杭州，深圳，广州”占据了近90%的需求量,\n是数据分析师的首选")+
+  scale_y_continuous(labels = scales::percent)
+
+group_diff <- diff(range(avg_sal))/20
+p2 <- p.cn+geom_histogram(aes(x=avg_sal,y=..density..),
+                          binwidth = group_diff,fill='turquoise3',color='white')+
+  stat_density(geom = 'line',position = 'identity',aes(x=avg_sal),color='brown1')+
+  labs(x='月薪(K/月)',title='数据分析师平均月薪为18.22k，月薪的分布主要集中在10k~25k之间，\n拿到10k以上薪资的机会比较大')
+mutiplot(p1,p2,cols = 1)
+```
+```{r}
+CN.clean$type<- NA
+CN.clean$type[CN.clean$city %in% top.freq(city,5)$x] <- 'top5'
+CN.clean$type[is.na(CN.clean$type)] <- 'other'
+CN.clean$type <- factor(CN.clean$type,levels = c('top5','other'))
+p.cn+geom_boxplot(aes(x=city,y=avg_sal,fill=CN.clean$type))+
+  labs(x='城市',y='月薪(K/月)',
+       title='需求量最多的5个城市的平均薪资均处于全国较高的水平，\n（苏州是一个特例，需求量少，薪资高)',
+       fill='需求量排名')+
+  theme(axis.text.x=element_text(angle = 30,hjust = 1) )
+```
+```{r}
+#问题2：不同经验，数据分析岗位的需求分布以及对应的薪资分布
+exp.table <- prop.table(table(experience))
+exp.table <- as.data.frame(exp.table)
+p3 <- ggplot(exp.table,aes(x=experience,y=Freq))+
+  my.ggplot.theme()+
+  geom_bar(fill='turquoise3',stat = 'identity')+
+  labs(x='工作经验',y='不同工作经验需求占总量的比率',
+       title="企业需要更有经验的分析师，主要需求\n集中在1-3年和3-5年经验")+
+  scale_y_continuous(labels = scales::percent)
+p4 <- p.cn + geom_boxplot(aes(x=experience,y=avg_sal),fill='turquoise3')+
+  labs(x='工作经验',y='平均月薪(K/月)',
+       title = '随着工作经验的增加，数据分析师的\n月薪有非常可观的增长')
+mutiplot(p3,p4,cols = 2)
+```
+```{r}
+#问题3：不同学历，数据分析岗位的需求分布以及对应的薪资分布
+edu.table <- prop.table(table(education))
+edu.table <- as.data.frame(edu.table)
+p5 <- ggplot(edu.table,aes(x=education,y=Freq))+
+  my.ggplot.theme()+
+  geom_bar(fill='turquoise3',stat = 'identity')+
+  labs(x='学历',y='不同学历占总量的比率',
+       title="超过90%的岗位需要本科及以上的学历")+
+  scale_y_continuous(labels = scales::percent)
+p6 <- p.cn + geom_boxplot(aes(x=education,y=avg_sal),fill='turquoise3')+
+  labs(x='学历',y='平均月薪(K/月)',
+       title = '学历随着工作经验的增长不是太明显')
+mutiplot(p5,p6,cols = 2)
+```
+```{r}
+#问题4：不同企业规模，数据分析岗位的各项需求分布及薪资分布
+scale.table <- data.frame(prop.table(table(scale)))
+p7 <- ggplot(scale.table,aes(x=scale,y=Freq))+
+  my.ggplot.theme()+
+  geom_bar(fill='turquoise3',stat = 'identity')+
+  labs(x='企业规模',y='不同企业规模需求占总量的比率',
+       title="接近90%的需求量集中在150人以上\n规模的企业")+
+  theme(axis.text.x = element_text(angle = 30,hjust = 1))+
+  scale_y_continuous(labels = scales::percent)
+
+  
+p8 <- p.cn + geom_boxplot(aes(x=scale,y=avg_sal),fill='turquoise3')+
+  labs(x='企业规模',y='平均月薪(K/月)',
+       title = '150人以下规模且需快速发展的企业\n愿意给出更高的薪酬')+
+  theme(axis.text.x = element_text(angle = 30,hjust = 1))
+mutiplot(p7,p8,cols = 2)
+```
+```{r}
+# 企业规模与工作经验要求分析
+sc.exp <- data.frame(prop.table(table(scale,experience),1))
+ggplot(data=sc.exp,aes(x=scale,y=Freq,fill=experience))+
+  my.ggplot.theme()+
+  geom_bar(stat = 'identity')+
+  labs(x='企业规模',y='需求比例',fill='工作经验',
+       title = '50~150人规模的企业对分析师的工作经验要求最高')+
+  geom_text(aes(label=paste(round(sc.exp$Freq,3)*100,'%',sep = '')),
+            colour='white',position = position_stack(.5),vjust=00)+
+  scale_y_continuous(labels = scales::percent)
+```
+```{r}
+# 问题5：探索数据分析岗位对工具型技能的需求
+key.df <- data.frame(table(reorder_size(merge.df$keyword,TRUE)))
+key.df$Freq <- key.df$Freq/length(CN.clean$id)
+ggplot(key.df)+my.ggplot.theme() + 
+  geom_bar(aes(x=Var1,y=Freq),fill = "turquoise3",stat = "identity") + 
+  labs(x="工具型技能",y="不同技能需求占总岗位需求量的比率",
+       title="SQL,R,Python,Excel是数据分析师的必备技能，超过78%的岗位都要求掌握SQL，
+       \nR语言的需求量居于第二") +
+  theme(axis.text.x = element_text(angle = 30,hjust = 1))+
+  geom_text(aes(x=Var1,y=Freq,label=paste(round(key.df$Freq,3)*100,'%',sep = '')),vjust=-0.2)+
+  scale_y_continuous(labels = scales::percent)
+```
+```{r}
+# 工具型技能与薪资的分析
+merge.df$type <- NA
+merge.df$type[merge.df$keyword %in% top.freq(merge.df$keyword,5)$x] <- 'top5'
+merge.df$type[is.na(merge.df$type)] <- 'other'
+merge.df$type <- factor(merge.df$type,levels = c('top5','other'))
+ggplot(merge.df)+my.ggplot.theme()+
+  geom_boxplot(aes(x=keyword,y=avg_sal,fill=merge.df$type))+
+  labs(x ='工具型技能',y='平均月薪(K/月)',fill='需求量排名')+
+  theme(axis.text.x = element_text(angle = 30,hjust = 1))
+```
+```{r}
+wordcloud2(not.tool.keyword,size = 0.9,fontFamily = '微软雅黑')
+```
+
