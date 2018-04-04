@@ -1,0 +1,161 @@
+---
+title: '17'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+library(dplyr)
+library(reshape2)
+library(cluster)
+library(fpc)
+library(mclust)
+```
+
+```{r}
+options(digits = 18)
+lss_all_cust_ls_info <- read.table('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\1顾客细分\\lss_all_cust_ls_info.txt',header=T,sep='\t')
+head(lss_all_cust_ls_info)
+lss_cust_payment <- read.table('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\1顾客细分\\lss_cust_payment.txt',header=T,sep='\t')
+head(lss_cust_payment)
+lss_cust_spend_info <- read.table('E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\1顾客细分\\lss_cust_spend_info.txt',header=T,sep='\t')
+head(lss_cust_spend_info)
+```
+```{r}
+
+data_cat_wide = dcast(lss_cust_spend_info,cust_id~ls_category,value.var = "ls_spd_share")
+head(data_cat_wide)
+names(data_cat_wide)
+data_cat_wide = data_cat_wide[,-2]
+#dim(data_cat_wide)
+#summary(data_cat_wide)
+### payment data
+
+data_payment_wide = dcast(lss_cust_payment,cust_id~payment_category_desc,value.var = "payment_amount_share")
+head(data_payment_wide)
+#dim(data_payment_wide)
+
+### 3. join data
+##把三张表进行合并，通过cust_id来进行列合并
+cust_all = merge(lss_all_cust_ls_info,data_payment_wide, by="cust_id")
+cust_all_fnl = merge(cust_all,data_cat_wide, by="cust_id")
+## 查看合并后的结果
+head(cust_all_fnl,10)
+
+dim(cust_all_fnl)
+#summary(cust_all_fnl)
+```
+```{r}
+cust_id = cust_all_fnl[,1]
+cust_sex  = cust_all_fnl[,2]
+
+cust_all_fnl2 = cust_all_fnl[,-c(1,2)]
+cust_all_fnl2[is.na(cust_all_fnl2)] =0
+
+## 把性别缺失值变成1.5
+cust_sex [is.na(cust_sex )] =1.5
+
+##把处理后的数据合并
+cust_all_fnl = data.frame(cust_id,cust_sex,cust_all_fnl2)
+head(cust_all_fnl)
+#summary(cust_all_fnl)
+
+###5. outlier capping and batch
+### 对于异常值进行处理，如果百分比小于0，则变成0，如果百分比大于1 则等于1
+dim(cust_all_fnl)
+for(i in 7:dim(cust_all_fnl)[2])
+{
+  cust_all_fnl[,i][cust_all_fnl[,i]<0] = 0
+  cust_all_fnl[,i][cust_all_fnl[,i]>1] = 1
+}
+
+
+#summary(cust_all_fnl)
+
+
+dim(cust_all_fnl)
+mydata = cust_all_fnl[,-28]
+dim(mydata)
+summary(mydata)
+```
+
+```{r}
+#主成分分析
+pca.data <- princomp(scale(mydata))
+
+#plot(pca.data)
+#plot(pca.data,type = 'l')
+#summary(pca.data)
+#loadings(pca.data)
+
+#comp <- scale(mydata[,-1])
+#wss <- (nrow(comp)-1)*sum(apply(comp,2,var))
+#for (i in 2:15) {
+# wss[i] <- sum(kmeans(comp,centers = i)$withinss)
+#}
+#plot(1:15,wss,type = 'b',xlab="Number of Clusters",ylab="Within groups sum of squares")
+
+
+
+comp = scale(mydata[,-1])
+
+wss <- (nrow(comp)-1)*sum(apply(comp,2,var))
+
+for (i in 2:15) wss[i] <- sum(kmeans(comp,centers=i)$withinss)
+plot(1:15, wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
+```
+```{r}
+s = sample(1:dim(mydata)[1],2000,replace = F)
+clus = 4
+medk = pam(scale(mydata[s,-1]),clus,trace=T)
+plotcluster(scale(mydata[s,-1]),medk$clustering)
+table(medk$clustering)
+Kcenter = medk$medoids
+
+```
+
+```{r}
+k = kmeans(scale(mydata[,-1]),centers = Kcenter,nstart = 25,iter.max = 1000)
+plotcluster(scale(mydata),k$cluster)
+k$size
+```
+
+```{r}
+
+mydata_mean_sd = aggregate(scale(mydata),by=list(k$cluster),FUN=mean)
+mydata_mean_sd = aggregate(scale(mydata),by=list(k$cluster),FUN=mean)
+head(mydata_mean_sd)
+
+```
+```{r}
+write.csv(mydata_mean_sd,'E:\\Udacity\\Data Analysis High\\R\\R_Study\\高级课程代码\\数据集\\第一天\\1顾客细分\\mydata_mean_sd.csv')
+```
+
+
+
+
+
