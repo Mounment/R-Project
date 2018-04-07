@@ -1,0 +1,350 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+# 1.加载包
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(caret)
+library(randomForest)
+library(xgboost)
+library(Hmisc)
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+```
+```{r}
+train.data <- read.csv('E:\\Udacity\\Data Analysis High\\R\\R_Study\\Train.csv',stringsAsFactors =F)
+test.data <- read.csv('E:\\Udacity\\Data Analysis High\\R\\R_Study\\Test.csv',stringsAsFactors =F)
+```
+
+### Item_Identifier 唯一的产品ID
+### Item_Weight 产品重量
+### Item_Fat_Content 产品是否低脂
+### Item_Visibility 该商品的展示的百分比
+### Item_Type 商品种类
+### Item_MRP 商品价格
+### Outlet_Identifier 商店ID
+### Outlet_Establishment_Year 商店成立的时间
+### Outlet_Size 商店的面积
+### Outlet_Location_Type 商店的所在的城市
+### Outlet_Type 商店的类型
+### Item_Outlet_Sales 预测变量,该产品在商店的销售额
+
+```{r}
+#预测变量,该产品在商店的销售额
+test.data$Item_Outlet_Sales <- NA
+all_data <- rbind(train.data,test.data)
+# 描述变量
+describe(all_data)
+```
+
+### Item_Weight缺失值较多,需要进行处理
+### Outlet_Size 缺失值较多,需要进行处理
+### Item_Fat_Content 需要对类别进行处理,只保留low fat和regular fat
+### Item_Visibility最小值是0,因为每一个产品都有展示的机会,所以0是异常值需要进行处理
+### Item_Type 归类较多,需要重新进行归类
+### Outlet_Establishment_Year年份数据需要进行转换,转换成2013年-商店创立的年份= 商店的时间
+```{r}
+# 处理缺失值 Item_Weight
+
+#计算商品的平均重量,用来填充空值
+tmp = aggregate(Item_Weight ~ Item_Identifier,data=all_data,FUN=mean)
+#将均值付给对应的空值
+for(i in which(is.na(all_data$Item_Weight))){
+  all_data$Item_Weight[i] = tmp$Item_Weight[tmp$Item_Identifier == all_data$Item_Identifier[i]]
+}
+sum(is.na(all_data$Item_Weight))
+
+# 处理缺失值 Outlet_Size
+prop.table(table(all_data$Outlet_Size))
+
+# 查看商店大小和商店类型的关系
+tmp2 <- aggregate(Item_Outlet_Sales ~ Outlet_Identifier+Outlet_Type+Outlet_Size,data=all_data,FUN=mean)
+tmp2
+#结论:可以看出商店的大小和销售额有关系,使用决策树根据商店销售额来预测商店的大小
+# 构造决策树来补充丢失值
+# 非缺失部分作为训练集,缺失的数据作为测试集
+fit <- rpart(factor(Outlet_Size)~Outlet_Type,data=all_data[all_data$Outlet_Size!='',],method = 'class')
+pred <- predict(fit,all_data[all_data$Outlet_Size == '',],type='class')
+all_data$Outlet_Size[all_data$Outlet_Size == ''] <- as.vector(pred)
+# 每个商店的规模都补充完整了
+sum(is.na(all_data$Outlet_Size))
+
+```
+
+```{r}
+# EDA数据处理
+
+# 1.创建一个表示销量的数据,并且将所有小数大于0的都向上取整
+# 销售量将作为预测模型的变量
+all_data$Item_Sales_Vol <-  round(all_data$Item_Outlet_Sales/all_data$Item_MRP+0.5,0)
+
+# 2.调整Item_Fat_Content的类型
+# 将商品的脂肪含量变成 Low Fat 和 Regular两个类型
+all_data$Item_Fat_Content <- as.character(all_data$Item_Fat_Content)
+all_data$Item_Fat_Content[all_data$Item_Fat_Content %in% c('LF','low fat')] <- 'Low Fat'
+all_data$Item_Fat_Content[all_data$Item_Fat_Content %in% c('reg')] <- 'Regular'
+table(all_data$Item_Fat_Content)
+
+
+# 3.调整商品类型 Item_Type
+# 可以看出DR开头为饮品,DF开头是食品,NC开头是消耗品
+summary(all_data$Item_Identifier)
+# 新建变量Item_Attribute,有三个类别DR,DF,NC
+all_data$Item_Attribute <- as.factor(substr(all_data$Item_Identifier,1,2))
+table(all_data$Item_Attribute)
+# 新增Item_Fat_Content类型,如果是消耗品则没有脂肪含量
+all_data$Item_Fat_Content[all_data$Item_Attribute == 'NC'] <- 'Non-Food'
+table(all_data$Item_Fat_Content)
+
+
+# 4.调整商品展示的百分比数据Item_Visibility
+# 将Item_Visibility为0的商品调整为商店的平均值
+tmp3 <- aggregate(Item_Visibility ~ Outlet_Identifier,data=all_data,FUN=mean)
+for(i in which(all_data$Item_Visibility == 0)){
+  all_data$Item_Visibility[i] = tmp3$Item_Visibility[tmp3$Outlet_Identifier == all_data$Outlet_Identifier[i]]
+}
+sum(all_data$Item_Visibility)
+
+# 5.生成新的年份变量Outlet_Years,该变量是离散型变量
+all_data$Outlet_Years <- 2013-all_data$Outlet_Establishment_Year
+
+# 6.将变量转换成因子
+col_factors <- c('Item_Fat_Content','Item_Type','Outlet_Location_Type',
+                 'Outlet_Years','Outlet_Type','Item_Attribute','Outlet_Identifier','Outlet_Size')
+for(i in col_factors){
+  all_data[,i] <- factor(all_data[,i])
+}
+
+
+
+```
+```{r}
+# 商店因素分析
+
+#销量与地理位置的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Outlet_Location_Type,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)
+# 结论:就地理位置而言,tir3的位置的商店的销售量最高
+
+#销量与商店规模的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Outlet_Type,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)
+# 结论:就商店的规模来看,类型3的超市收益最高,Grocery store的销量最低
+
+#销量与开店时间的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Outlet_Years,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)
+# 结论:就开店的时间来看,开店时间越长的大商店,销量越多,利润也越高
+
+#销量与商店规模的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Outlet_Size,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)
+# 结论:并不是越大的商店就有越高的销量
+```
+### 总结:
+### 1.商店的类型是影响销量的首要因素
+### 2.年代越久远的商店的销量可能越高,消费者比较信任开店时间长的商店
+### 3.Type1类型的商店的销量比较平稳,适合于做出一些长线投资
+### 4.商店的规模也不是影响销量的首要因素
+
+
+```{r}
+# 商品层面的分析
+
+#商品的展示与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_Visibility,y=Item_Sales_Vol,color=Outlet_Type))+
+  geom_point(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  geom_smooth(method = 'lm',color='red')+
+  theme(legend.position = 'None')
+#结论:展示的机会越大,销量就越多
+
+
+# 商品的重量与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_Weight,y=Item_Sales_Vol,color=Outlet_Type))+
+  geom_point(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  geom_smooth(method = 'lm',color='red')+
+  theme(legend.position = 'None')
+#结论:无关
+
+# 商品的价格与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_MRP,y=Item_Sales_Vol,color=Outlet_Type))+
+  geom_point(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  geom_smooth(method = 'lm',color='red')+
+  theme(legend.position = 'None')
+#结论:商品的价格越高,销量越低
+
+# 商品的类型与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_Attribute,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  theme(legend.position = 'None')
+#结论:无关
+
+# 商品的脂肪含量与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_Fat_Content,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  theme(legend.position = 'None')
+#结论:无关
+
+# 商品的类型与销量的关系
+ggplot(data=all_data[!is.na(all_data$Item_Outlet_Sales),],
+       aes(x=Item_Type,y=Item_Sales_Vol,fill=Outlet_Type))+
+  geom_boxplot(alpha=0.7)+
+  facet_wrap(~Outlet_Type)+
+  theme(axis.text.x = element_text(angle = 45,hjust = 1),legend.position = 'None')
+#结论:早餐,海鲜,水果等生鲜食品有比较大的差异性
+```
+### 总结:
+### 1.商品展示的百分比,商品价格,商品种类对销量有一定的影响
+### 2.其他类别的因素似乎与销量无关,商店的类型比商品的类型更加能影响销量
+### 3.在数据建模中打算用:Outlet_Type , Item_Visibility ,
+###  Outlet_Location_Type , Item_MRP ,Item_Type , Outlet_Years , Outlet_Size 来进行建模
+
+```{r}
+# 分割数据集
+train <- all_data[!is.na(all_data$Item_Outlet_Sales),]
+test <- all_data[is.na(all_data$Item_Outlet_Sales),]
+#设置种子，创建训练数据的训练子集和测试子集
+set.seed(1234)
+ind <- createDataPartition(train$Item_Sales_Vol,p=.7,list = FALSE)
+train_val <- train[ind,]
+test_val <- train[-ind,]
+
+```
+
+```{r}
+# 需要建模的变量
+myformal <- Item_Sales_Vol ~ Outlet_Type + Item_Visibility + 
+  Outlet_Location_Type  + Item_MRP + Item_Type + Outlet_Years + Outlet_Size
+
+# 创建模型评估函数
+model.rmse <- function(pred,act){
+  sqrt(sum((act-pred)^2)/length(act))
+}
+```
+```{r}
+# 决策树
+fit.tr <- rpart(myformal,data=train_val,method = 'anova')
+summary(fit.tr)
+rpart.plot(fit.tr)
+pred <- predict(fit.tr,test_val)
+model.rmse(pred*test_val$Item_MRP,test_val$Item_Outlet_Sales)
+
+```
+```{r}
+# 随机森林
+set.seed(2345)
+# 需要去掉数据集中character类型的column
+train_val <- train_val[,c('Item_Fat_Content','Item_Type','Outlet_Location_Type','Outlet_Years',
+                          'Outlet_Type','Item_Attribute','Outlet_Identifier','Item_Outlet_Sales','Item_Sales_Vol',
+                          'Item_Visibility','Item_MRP','Outlet_Size')]
+fit.rf <- randomForest(
+              myformal,
+              data = train_val,
+              ntree=500)
+summary(fit.rf)
+pred <- predict(fit.rf,test_val)
+model.rmse(pred*test_val$Item_MRP,test_val$Item_Outlet_Sales)
+
+# 结论:似乎比决策树更差
+```
+```{r}
+#GBM ,使用5折交叉验证
+Ctrl <- trainControl(method = 'repeatedcv',number = 5,repeats = 5)
+set.seed(3456)
+fit.gbm <- train(myformal,
+                 data=train_val,
+                 trControl=Ctrl,
+                 method='gbm',
+                 verbose=F)
+summary(fit.gbm)
+pred <- predict(fit.gbm,test_val)
+model.rmse(pred*test_val$Item_MRP,test_val$Item_Outlet_Sales)
+# 结论:目前得分最高的,可能也是最优的模型,但是运行时间较长
+```
+```{r}
+#xgboost
+# 由于xgboost模型要求所有的变量都为数值型，因此存在分类变量则需要将分类变量转化为0，1格式的稀疏矩阵
+mymatrix <- function(train){
+  matrix_num <- train[,c("Item_Visibility","Item_MRP")]
+  matrix_num <- cbind(matrix_num,
+                      model.matrix(~Outlet_Type-1,train),
+                      model.matrix(~Outlet_Location_Type-1,train),
+                      model.matrix(~Outlet_Size-1,train),
+                      model.matrix(~Item_Type-1,train),
+                      model.matrix(~Outlet_Years-1,train)
+                      )
+  return(data.matrix(matrix_num))
+}
+# 获取每个数据集的稀疏矩阵
+xgb.train_val <- mymatrix(train_val)
+xgb.test_val <- mymatrix(test_val)
+xgb.test <- mymatrix(test)
+
+# 预测变量和响应变量要分开
+dtrain_val <- xgb.DMatrix(data = xgb.train_val,label=train_val$Item_Sales_Vol)
+dtest_val <- xgb.DMatrix(data = xgb.test_val,label=test_val$Item_Sales_Vol)
+dtest_sub <- xgb.DMatrix(data=xgb.test)
+
+model<- xgboost(data=dtrain_val,nround = 5)
+summary(model)
+pred <- predict(model,dtest_val)
+model.rmse(pred*test_val$Item_MRP,test_val$Item_Outlet_Sales)
+
+# 结论:比GBM要差,但是运行速度较快
+```
+
+```{r}
+# 优化模型
+# 将循环次数增加到10次,为了防止过拟合,将最大深度从默认的6改为5
+model_turned <- xgboost(data=dtrain_val,nround=10,max.depth=5)
+summary(model_turned)
+pred <- predict(model_turned,dtest_val)
+model.rmse(pred*test_val$Item_MRP,test_val$Item_Outlet_Sales)
+
+# 变化较为明显
+```
+## 总结:如果不考虑运行时间,那么GBM是最优的模型,如果兼顾运行时间,则选用优化后的xgboot进行建模
