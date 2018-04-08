@@ -1,0 +1,282 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+# 离职分析
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(plyr)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(caret)
+library(gbm)
+library(survival)
+library(pROC)
+library(DMwR)
+library(scales)
+```
+
+
+
+
+```{r}
+Attr.df <- read.csv('E:\\Udacity\\Data Analysis High\\R\\R_Study\\employee.csv',header=T,encoding = 'UTF-8')
+head(Attr.df)
+summary(Attr.df)
+```
+
+
+```{r}
+g1 <- ggplot(Attr.df,aes(x=Age,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g2 <- ggplot(Attr.df,aes(x=NumCompaniesWorked,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g3 <- ggplot(Attr.df,aes(x=YearsAtCompany,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g4 <- ggplot(Attr.df,aes(x=TotalWorkingYears,fill=Attrition))+
+  geom_density(alpha=0.7)
+grid.arrange(g1,g2,g3,g4,ncol=2,nrow=2)
+```
+```{r}
+
+
+
+g5 <- ggplot(Attr.df, aes(x= Gender,fill = Attrition)) + 
+  geom_bar(position = "fill") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g6 <-ggplot(Attr.df, aes(x= JobLevel,fill = Attrition)) + 
+  geom_bar(position = "fill") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g7 <- ggplot(Attr.df, aes(x= Education,fill = Attrition)) + 
+  geom_bar(position = "fill") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g8 <- ggplot(Attr.df, aes(x= Department,fill = Attrition)) + 
+  geom_bar(position = "fill") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+grid.arrange(g5, g6, g7, g8, ncol = 2, nrow = 2)
+
+
+```
+
+```{r}
+g9 <- ggplot(Attr.df,aes(x=MonthlyIncome,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g10 <- ggplot(Attr.df, aes(x= JobInvolvement,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+grid.arrange(g9, g10, ncol = 2)
+```
+```{r}
+ggplot(Attr.df,aes(x=JobInvolvement,y=MonthlyIncome,group=JobInvolvement))+
+  geom_boxplot(aes(fill=factor(..x..)),alpha=0.7)+
+  theme(legend.position = 'none',plot.title = element_text(hjust = 0.5))+
+  facet_grid(~Attrition)+ggtitle('Attrition')
+
+```
+
+```{r}
+g11 <- ggplot(Attr.df,aes(x=MonthlyIncome,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g12 <- ggplot(Attr.df, aes(x= TrainingTimesLastYear,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g13 <- ggplot(Attr.df,aes(x=YearsSinceLastPromotion,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+g14 <- ggplot(Attr.df, aes(x= StockOptionLevel,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+grid.arrange(g11, g12,g13,g14, ncol = 2)
+```
+```{r}
+g15 <- ggplot(Attr.df, aes(x= JobSatisfaction,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g16 <- ggplot(Attr.df, aes(x= RelationshipSatisfaction,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g17 <- ggplot(Attr.df, aes(x= EnvironmentSatisfaction,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+grid.arrange(g15, g16,g17, ncol = 3)
+```
+```{r}
+
+g18 <- ggplot(Attr.df, aes(x= OverTime,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g19 <- ggplot(Attr.df, aes(x= WorkLifeBalance,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g20 <- ggplot(Attr.df, aes(x= BusinessTravel,  group=Attrition)) + 
+  geom_bar(aes(y = ..prop.., fill = Attrition), 
+           stat="count", alpha = 0.7,position = "identity",color="black") +
+  labs(y="Percentage") + scale_y_continuous(labels=percent) 
+
+g21 <- ggplot(Attr.df,aes(x=DistanceFromHome,fill=Attrition))+
+  geom_density(alpha=0.7)
+
+grid.arrange(g18, g19,g20,g21, ncol = 2)
+```
+```{r}
+levels(Attr.df$JobRole) <- c("HC", "HR", "Lab", "Man", "MDir", "RsD", "RsSci", "SlEx", "SlRep")
+levels(Attr.df$EducationField) <- c("HR", "LS", "MRK", "MED", "NA", "TD")
+Attr.df <- Attr.df[c(-9,-10,-22,-27)]
+```
+```{r}
+n <- nrow(Attr.df)
+rnd <- sample(n,n*0.7)
+train <- Attr.df[rnd,]
+test <- Attr.df[-rnd,]
+```
+```{r}
+dtree <- rpart(Attrition~.,data=train)
+preds <- predict(dtree,test,type='class')
+rocv <- roc(as.numeric(test$Attrition),as.numeric(preds))
+rocv$auc
+prop.table(table(test$Attrition,preds,dnn = c('Actual','Predicted')),1)
+dtreepr <- prune(dtree,cp=0.01666667)
+predspr <- predict(dtreepr,test,type='class')
+rocvpr <- roc(as.numeric(test$Attrition),as.numeric(predspr))
+rocvpr$auc
+rpart.plot(dtreepr,type=4,extra=104,tweak = 0.9,fallen.leaves = F,cex = 0.7)
+```
+```{r}
+set.seed(2343)
+fit.forest <- randomForest(Attrition~.,data=train)
+rfpreds <- predict(fit.forest,test,type='class')
+rocrf <- roc(as.numeric(test$Attrition),as.numeric(rfpreds))
+rocrf$auc
+
+```
+```{r}
+set.seed(3443)
+ctrl <- trainControl(method = 'cv',number=10,summaryFunction = twoClassSummary,classProbs = T)
+gbmfit <- train(Attrition~.,data=train,method='gbm',verbose=F,metric='ROC',trControl=ctrl)
+gbmpreds <- predict(gbmfit,test)
+rocgbm <- roc(as.numeric(test$Attrition),as.numeric(gbmpreds))
+rocgbm$auc
+```
+
+```{r}
+ctrl$seeds <- gbmfit$control$seeds
+
+model_weights <- ifelse(train$Attrition == 'No',
+                        (1/table(train$Attrition)[1]),
+                        (1/table(train$Attrition[2]))
+
+weightedleft <- train(Attrition ~ .,
+                      data=train,
+                      method='gbm',
+                      verbose=F,
+                      weights=model_weights,
+                      metric='ROC',
+                      trControl=ctrl)
+
+weightedpreds <- predict(weightedleft,test)
+rocweight <- roc(as.numeric(test$Attrition),as.numeric(weightedpreds))
+rocweight$auc
+
+ctrl$sampling <- 'up'
+set.seed(3433)
+upfit <- train(Attrition ~., 
+               data = train, 
+               method = "gbm", 
+               verbose = FALSE, 
+               metric = "ROC", 
+               trControl = ctrl)
+
+uppreds <- predict(upfit, test)
+rocup <- roc(as.numeric(test$Attrition), as.numeric(uppreds))
+rocup$auc
+
+ctrl$sampling <- 'down'
+set.seed(3433)
+downfit <- train(Attrition ~., 
+               data = train, 
+               method = "gbm", 
+               verbose = FALSE, 
+               metric = "ROC", 
+               trControl = ctrl)
+
+downpreds <- predict(downfit, test)
+rocdown <- roc(as.numeric(test$Attrition), as.numeric(downpreds))
+rocdown$auc
+
+prop.table(table(test$Attrition, weightedpreds, dnn = c("Actual", "Predicted")),1)
+```
+```{r}
+varImp(upfit)
+```
+
+```{r}
+upfitprobs <- predict(upfit,test,type = 'prob')
+test$Prediction <- upfitprobs$Yes
+ggplot(test,
+       aes(x=MonthlyIncome,y=Prediction,color=factor(JobInvolvement)))+
+  geom_point(alpha=0.7)+
+  geom_smooth(method = 'lm')+
+  facet_wrap(~JobInvolvement)+
+  theme(legend.position = 'none')+
+  ggtitle('JobInvolvement')+
+  theme(plot.title = element_text(hjust = 0.5))
+```
+```{r}
+ggplot(test,aes(x=JobRole,y=Prediction,fill=JobRole))+
+  geom_boxplot(alpha=0.5)+
+  theme(legend.position = 'none')+
+  scale_y_continuous(labels = percent)
+```
