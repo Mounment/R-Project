@@ -1,0 +1,234 @@
+---
+title: "Untitled"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+library(tidyverse)
+library(stringr)
+library(data.table)
+library(maps)
+library(lubridate)
+library(leaflet)
+```
+
+####    S# ：数据编号
+####    Location：案件发生城市，州
+####    Date：时间
+####    Summary：案件总结
+####    Fatalities：死亡人数
+####    Injured：受伤人数
+####    Total victims：受害者总人数
+####    Mental Health Issues：精神状况
+####    Race：种族
+####    Gender：性别
+####    Latitude：纬度
+####    Longitude：经度
+
+
+```{r}
+setwd('E:\\ggplot案例')
+#shooting <- as.tibble(fread("Mass Shootings Dataset Ver 2.csv"))
+shooting <- read.csv('Mass Shootings Dataset Ver 2.csv',stringsAsFactors = F,header = T)
+summary(shooting)
+glimpse(shooting)
+```
+
+```{r}
+shooting <- shooting %>% select(1:13) %>% mutate(Date=mdy(shooting$Date),year=year(Date))
+summary(shooting$year)
+
+shooting$Gender<-if_else(shooting$Gender=="M","Male",shooting$Gender)
+shooting$Race<-if_else(str_detect(shooting$Race,"Black American or African American"),"Black",shooting$Race)
+shooting$Race<-if_else(str_detect(shooting$Race,"White American or European American"),"White",shooting$Race)
+shooting$Race<-if_else(str_detect(shooting$Race,"Asian American"),"Asian",shooting$Race)
+shooting$Race<-if_else(str_detect(shooting$Race,"Some other race"),"Other",shooting$Race)
+shooting$Race<-if_else(str_detect(shooting$Race,"Native American or Alaska Native"),"Native American",shooting$Race)
+shooting$yearcut<-cut(shooting$year,breaks = 10)
+shooting$Mental.Health.Issues<-if_else(str_detect(shooting$Mental.Health.Issues,"Un"),"Unknown",shooting$Mental.Health.Issues)
+shooting$Race<-str_to_upper(shooting$Race)
+shooting$Mental.Health.Issues<-str_to_upper(shooting$Mental.Health.Issues)
+
+shooting$city <- sapply(shooting$Location,function(x){
+  return(unlist(str_split(x,','))[1] %>% str_trim())
+})
+
+shooting$state <- sapply(shooting$Location,function(x){
+  return(unlist(str_split(x,','))[2] %>% str_trim())
+})
+```
+
+```{r}
+# 每年受到枪击的死亡人数
+shooting %>% 
+   group_by(year) %>%
+   summarise(total=sum(Total.victims)) %>%
+   ggplot(aes(x=year,y=total)) +
+   geom_bar(stat = 'identity',fill='blue') +
+   geom_text(aes(label=total),vjust=-0.2) +
+   xlim(1969,2020) +
+   geom_line(color='red') +
+   ylab('Total victims every year') +
+   ggtitle('People died because of gun shoot every year')
+```
+```{r}
+# 发生枪击案的地点和死亡人数
+shooting %>%
+  select(Total.victims,Fatalities,Longitude,Latitude,Summary) %>%
+  na.omit() %>%
+  leaflet() %>%
+  addProviderTiles(providers$OpenStreetMap) %>%
+  fitBounds(-124,30,-66,43) %>%
+  addCircles(color='#8A0707',lng = ~Longitude,lat = ~Latitude,weight = 1,
+             radius = ~sqrt(Total.victims) * 20000,popup = ~Summary)
+
+
+shooting %>%
+  select(Total.victims,Fatalities,Longitude,Latitude,Summary) %>%
+  na.omit() %>%
+  leaflet() %>%
+  addProviderTiles(providers$OpenStreetMap) %>%
+  fitBounds(-124,30,-66,43) %>%
+  addCircles(color='blue',lng = ~Longitude,lat = ~Latitude,weight = 1,
+             radius = ~sqrt(Fatalities) * 20000,popup = ~Summary)
+```
+
+```{r}
+# EDA 分析
+shooting %>%
+  ggplot(aes(x=factor(Gender),fill=factor(Gender)))+
+  geom_bar()+
+  xlab('Gender')+
+  ylab('Number of each Gender')+
+  ggtitle('The distribution of gender')
+
+
+shooting %>% 
+  na.omit() %>%
+  group_by(Race) %>%
+  summarise(num=sum(Total.victims)) %>%
+  ggplot(aes(x=factor(Race),y=num,fill=factor(Race)))+
+  geom_bar(stat = 'identity')+
+  coord_polar(theta = 'y')+
+  labs(x='Race',y='Number of killed people',fill='Race')+
+  ggtitle('People killed by different race')
+
+
+shooting %>%
+  mutate(month=month(Date)) %>%
+  group_by(month) %>%
+  summarise(n=sum(Total.victims)) %>%
+  ggplot(aes(x=factor(month),y=n)) +
+  geom_bar(stat = 'identity')+
+  labs(x='month',y='Number of killed people')+
+  ggtitle('The distribution of killed people every month')+
+  geom_text(aes(label=n),vjust=-0.2,color='red')+
+  theme_bw()
+
+
+shooting %>% 
+  na.omit() %>% 
+  ggplot(aes(x=Mental.Health.Issues)) + 
+  geom_bar()+
+  scale_x_discrete(limits=c("NO","YES"))+
+  theme_bw()
+
+
+shooting %>%
+  na.omit() %>%
+  group_by(Mental.Health.Issues) %>%
+  summarise(n=sum(Total.victims)) %>%
+  ggplot(aes(x=factor(Mental.Health.Issues),y=n,group=1)) +
+  geom_bar(stat = 'identity',fill='pink')+
+  scale_x_discrete(limits=c('NO','YES'))+
+  geom_text(aes(label=n),vjust=-0.2)+
+  geom_line(color='red')
+
+
+shooting %>%
+  na.omit() %>%
+  group_by(yearcut) %>%
+  ggplot(aes(x=yearcut,fill=Race))+
+  geom_bar(position = 'dodge')
+```
+```{r}
+# 提取枪手的年龄分布
+tmp <- mutate(shooting,age=str_extract_all(shooting$Summary,pattern = '(,\\s)\\d{2}(,)'),
+              age2 = str_extract_all(shooting$Summary,pattern = '(a\\s)\\d{2}(-year)'))
+tmp$age <- str_sub(tmp$age,3,4)
+tmp$age2 <- str_sub(tmp$age2,3,4)
+te <- subset(tmp,tmp$age != 'ar')
+te2 <- subset(tmp,tmp$age2 != 'ar')
+te <- rbind(te,te2)
+
+for(i in 1:nrow(te)){
+  if(te$age[i] == 'ar'){
+    te$age[i] = te$age2[i]
+  }
+}
+te <- arrange(te,age)
+te <- te[-c(1:4),]
+te <- arrange(te,`S#`)
+te$age <- as.integer(te$age)
+te3 <- te %>%
+  select(`S#`,age) %>%
+  mutate(agecut=cut(te$age,breaks = 10*(1:7)))
+shoot_age <- left_join(te3,shooting)
+```
+
+```{r}
+ggplot(data=shoot_age,aes(x=agecut))+
+  geom_bar(fill='blue')+
+  theme_bw()
+
+ggplot(data=shoot_age,aes(x=agecut,fill=Mental.Health.Issues))+
+  geom_bar()
+
+shooting %>%
+  group_by(city) %>%
+  summarise(count=n()) %>%
+  filter(city != '' & count >= 2) %>%
+  ggplot(aes(x=reorder(city,count),y=count))+
+  geom_bar(stat = 'identity',fill='lightblue')+
+  coord_flip()+
+  labs(x='City',y='Number of gun-shot happended')+
+  ggtitle('The number of case happened in each city')
+
+
+shooting %>%
+  group_by(state) %>%
+  summarise(count=n()) %>%
+  filter(state != '' & count >= 2) %>%
+  ggplot(aes(reorder(state,count),y=count))+
+  geom_bar(stat='identity',fill='lightblue')+
+  coord_flip()+
+  labs(x='State',y='Number of gun-shot happended')+
+  ggtitle('The number of case happened in each state')
+```
+
+

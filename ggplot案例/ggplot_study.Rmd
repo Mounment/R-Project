@@ -1,0 +1,203 @@
+---
+title: "ggplot_study"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+library(maps)
+library(maptools)
+library(rgdal)
+library(plyr)
+library(MASS) 
+library(dplyr)
+```
+
+
+```{r}
+# ggplot学习,使用钻石数据集进行案例
+set.seed(123)
+dsmall <- diamonds[sample(nrow(diamonds), 100), ]
+dim(dsmall)
+
+qplot(carat, price, data = diamonds)
+
+qplot(log(carat), log(price), data = diamonds)
+
+qplot(carat, price, data = dsmall, colour = color)
+qplot(carat, price, data = dsmall, shape = cut)
+
+qplot(carat, price, data = dsmall, geom = c("point", "smooth"))
+```
+```{r}
+qplot(cut, price / carat, data = diamonds, geom = "boxplot")
+qplot(color, data = diamonds, geom = "bar")
+qplot(carat, data = diamonds, geom = "histogram")
+qplot(carat, data = diamonds, geom = "density") 
+
+```
+```{r}
+qplot(date, unemploy / pop, data = economics, geom = "line")
+
+qplot(date, uempmed, data = economics, geom = "line") 
+```
+
+```{r}
+qplot(carat, data = diamonds, facets = color ~ .,
+      geom = "histogram", binwidth = 0.1, xlim = c(0, 3))
+
+qplot(
+  carat, price, data = dsmall,
+  xlab = "Price ($)", ylab = "Weight (carats)",
+  main = "Price-weight relationship"
+)
+```
+```{r}
+df <- data.frame(x = rnorm(2000), y = rnorm(2000))
+norm <- ggplot(df, aes(x, y))
+norm
+norm + geom_point()
+
+norm + geom_point(shape = 1)
+norm + geom_point(shape = ".") # Pixel sized
+```
+
+
+```{r}
+# 地图
+
+```
+```{r}
+big_cities <- subset(us.cities, pop > 500000)
+qplot(long, lat, data = big_cities) + borders("state", size = 0.5)
+tx_cities <- subset(us.cities, country.etc == "TX")
+ggplot(tx_cities, aes(long, lat)) +
+  borders("county", "texas", colour = "grey70") +
+  geom_point(colour = alpha("black", 0.5))
+```
+```{r}
+states <- map_data("state")
+arrests <- USArrests
+names(arrests) <- tolower(names(arrests))
+arrests$region <- tolower(rownames(USArrests))
+choro <- merge(states, arrests, by = "region")
+choro <- choro[order(choro$order), ]
+qplot(long, lat, data = choro, group = group,fill = assault, geom = "polygon")
+qplot(long, lat, data = choro, group = group,
+      fill = assault / murder, geom = "polygon")
+```
+```{r}
+#中国地图
+
+```
+```{r}
+china=readShapePoly('E:\\Udacity\\Data Analysis High\\R\\R_Study\\第一天数据\\bou2_4p.shp')      
+plot(china)
+x<-china@data
+xs<-data.frame(x,id=seq(0:924)-1)
+shapefile_df <- fortify(china)
+china_mapdata<-join(shapefile_df, xs, type = "full")
+ggplot(china_mapdata, aes(x = long, y = lat, group = group,fill=NAME))+
+  geom_polygon( )+
+  geom_path(colour = "grey40")+
+  scale_fill_manual(values=colours(),guide=FALSE)
+```
+```{r}
+NAME<-c("北京市","天津市","河北省","山西省","内蒙古自治区","辽宁省","吉林省",
+        "黑龙江省","上海市","江苏省","浙江省","安徽省","福建省", "江西省","山东省","河南省",
+        "湖北省", "湖南省","广东省", "广西壮族自治区","海南省", "重庆市","四川省", "贵州省",
+        "云南省","西藏自治区","陕西省","甘肃省","青海省","宁夏回族自治区","新疆维吾尔自治区", 
+        "台湾省","香港特别行政区")
+
+pop<-c(7355291,3963604,20813492,10654162,8470472,15334912,9162183,13192935,8893483,25635291,20060115,19322432,11971873,11847841,30794664,26404973,
+       17253385,19029894,32222752,13467663,2451819,10272559,26383458,10745630,
+       12695396,689521,11084516,7113833,1586635,1945064,6902850,23193638,7026400)
+
+pop<-data.frame(NAME,pop)
+
+china_pop<-join(china_mapdata, pop, type = "full")
+
+ggplot(china_pop, aes(x = long, y = lat, group = group,fill=pop))+
+  geom_polygon( )+
+  geom_path(colour = "grey40")
+```
+```{r}
+SH<-subset(china_mapdata,NAME=="上海市")
+
+ggplot(SH, aes(x = long, y = lat, group = group,fill=NAME))+
+  geom_polygon(fill="lightblue" )+
+  geom_path(colour = "grey40")+
+  ggtitle("中华人民共和国上海市")+
+  #geom_point(x=121.4,y=31.15,fill=FALSE)+
+  annotate("text",x=121.4,y=31.15,label="上海市")
+```
+
+```{r}
+(unemp <- qplot(date, unemploy, data=economics, geom="line",xlab = "", ylab = "No. unemployed (1000s)"))
+
+presidential1 <- presidential[-(1:3), ]
+yrng <- range(economics$unemploy)
+xrng <- range(economics$date)
+unemp + geom_vline(aes(xintercept = start), data = presidential)
+
+
+unemp + geom_rect(aes(NULL, NULL, xmin = start, xmax = end,
+                      fill = party), ymin = yrng[1], ymax = yrng[2],
+                  data = presidential1) + scale_fill_manual(values =
+                                                              alpha(c("blue", "red"), 0.2))
+
+```
+
+
+
+```{r}
+huron <- data.frame(year = 1875:1972, level = LakeHuron)
+ggplot(huron, aes(year)) +
+  geom_line(aes(y = level - 5), colour = "blue") +
+  geom_line(aes(y = level ), colour = "black") +
+  geom_line(aes(y = level + 5), colour = "red")
+```
+
+```{r}
+
+ggplot(birthwt, aes(x=bwt)) + geom_histogram(fill="red", colour="black")
+
+mtcars$cyl <- factor(mtcars$cyl) # Convert cyl to a factor
+
+ggplot(mtcars, aes(x=wt, y=mpg, colour=cyl)) + geom_point()
+
+```
+
+```{r}
+p <- ggplot(PlantGrowth, aes(x=group, y=weight, fill=group)) + geom_boxplot()
+p
+
+p + guides(fill=FALSE)
+
+p + theme(legend.position="top")
+
+p + theme(legend.position=c(1,0), legend.justification=c(1,0))
+```
